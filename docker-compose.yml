@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/tao_dividends
+      - REDIS_URL=redis://redis:6379/0
+      - API_KEY=${API_KEY}
+      - DATURA_API_KEY=${DATURA_API_KEY}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/tao_dividends
+      - REDIS_URL=redis://redis:6379/0
+      - API_KEY=${API_KEY}
+      - DATURA_API_KEY=${DATURA_API_KEY}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    command: celery -A app.worker worker --loglevel=info
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=tao_dividends
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:6
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
