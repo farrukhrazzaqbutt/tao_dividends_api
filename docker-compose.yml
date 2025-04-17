@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  api:
+  web:
     build: .
     ports:
       - "8000:8000"
@@ -9,32 +9,43 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/tao_dividends
       - REDIS_URL=redis://redis:6379/0
       - API_KEY=${API_KEY}
+      - API_TOKEN=${API_TOKEN}
+      - BITTENSOR_WALLET_SEED=${BITTENSOR_WALLET_SEED}
       - DATURA_API_KEY=${DATURA_API_KEY}
       - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - BITTENSOR_WALLET_PATH=${BITTENSOR_WALLET_PATH}
+      - BITTENSOR_NETWORK=${BITTENSOR_NETWORK}
     depends_on:
       - db
       - redis
     volumes:
       - .:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - tao_network
 
-  worker:
+  celery_worker:
     build: .
+    command: celery -A app.worker worker --loglevel=info
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/tao_dividends
       - REDIS_URL=redis://redis:6379/0
       - API_KEY=${API_KEY}
+      - API_TOKEN=${API_TOKEN}
+      - BITTENSOR_WALLET_SEED=${BITTENSOR_WALLET_SEED}
       - DATURA_API_KEY=${DATURA_API_KEY}
       - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - BITTENSOR_WALLET_PATH=${BITTENSOR_WALLET_PATH}
+      - BITTENSOR_NETWORK=${BITTENSOR_NETWORK}
     depends_on:
-      - db
+      - web
       - redis
     volumes:
       - .:/app
-    command: celery -A app.worker worker --loglevel=info
+    networks:
+      - tao_network
 
   db:
-    image: postgres:13
+    image: postgres:15
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -43,14 +54,22 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - tao_network
 
   redis:
-    image: redis:6
+    image: redis:7
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - tao_network
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  tao_network:
+    driver: bridge 

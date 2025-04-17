@@ -140,45 +140,57 @@ async def tao_dividends(
         if trade:
             logger.info("Trade flag is True, triggering stake operation")
             
-            # Get sentiment score
-            sentiment_score = await get_sentiment(netuid, hotkey)
-            logger.info(f"Sentiment score: {sentiment_score}")
-            
-            # Convert sentiment_score to float if it's a string
-            if isinstance(sentiment_score, str):
-                sentiment_score = float(sentiment_score)
-            
-            # Ensure hotkey is not empty
-            if not hotkey or hotkey.strip() == "":
-                logger.error("Empty hotkey address provided")
+            try:
+                # Get sentiment score
+                sentiment_score = await get_sentiment(netuid, hotkey)
+                logger.info(f"Sentiment score: {sentiment_score}")
+                
+                # Convert sentiment_score to float if it's a string
+                if isinstance(sentiment_score, str):
+                    sentiment_score = float(sentiment_score)
+                
+                # Ensure hotkey is not empty
+                if not hotkey or hotkey.strip() == "":
+                    logger.error("Empty hotkey address provided")
+                    response["trade"] = {
+                        "triggered": True,
+                        "error": "Empty hotkey address provided",
+                        "sentiment_score": sentiment_score,
+                        "success": False
+                    }
+                    return response
+                
+                # Trigger stake operation as Celery task
+                task_result = trigger_stake_task.delay(netuid, hotkey, sentiment_score)
+                
+                # Add task info to response
                 response["trade"] = {
                     "triggered": True,
-                    "error": "Empty hotkey address provided",
+                    "task_id": task_result.id,  # Celery task has an id attribute
                     "sentiment_score": sentiment_score,
+                    "success": True  # We assume success since the task was queued
+                }
+            except Exception as e:
+                logger.error(f"Error in sentiment analysis: {str(e)}")
+                # Return a 200 response with error details instead of raising an exception
+                response["trade"] = {
+                    "triggered": True,
+                    "error": f"Error in sentiment analysis: {str(e)}",
                     "success": False
                 }
                 return response
-            
-            # Trigger stake operation as Celery task
-            task_result = trigger_stake_task.delay(netuid, hotkey, sentiment_score)
-            
-            # Add task info to response
-            response["trade"] = {
-                "triggered": True,
-                "task_id": task_result.id,  # Celery task has an id attribute
-                "sentiment_score": sentiment_score,
-                "success": True  # We assume success since the task was queued
-            }
         else:
             response["trade"] = {"triggered": False}
             
         return response
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in tao_dividends endpoint: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            status_code=422,
+            detail=f"Error processing request: {str(e)}"
         )
 
 @app.get("/api/v1/operations")
@@ -219,3 +231,8 @@ async def get_operations(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}

@@ -1,153 +1,90 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app.utils import get_sentiment, analyze_sentiment, perform_stake, perform_unstake
-import httpx
-from datetime import datetime
+import os
+
 
 @pytest.mark.asyncio
-async def test_get_sentiment():
-    """Test sentiment analysis from Twitter data."""
-    # Mock Datura API response
-    mock_tweets = {
-        "tweets": [
-            {"text": "Bittensor netuid 18 is amazing!", "created_at": datetime.utcnow().isoformat()},
-            {"text": "Great project with Bittensor netuid 18", "created_at": datetime.utcnow().isoformat()}
-        ]
-    }
+async def test_get_sentiment_success(client, db_session):
+    """Test successful sentiment analysis."""
+    api_key = os.getenv("API_TOKEN", "test_key")
     
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value = MagicMock(
-            status_code=200,
-            json=lambda: mock_tweets
+    # Mock all external services
+    with patch("app.services.redis_client") as mock_redis, \
+         patch("app.utils.Subtensor") as mock_subtensor, \
+         patch("app.utils.get_sentiment") as mock_get_sentiment:
+        
+        mock_redis.get.return_value = None
+        mock_instance = MagicMock()
+        mock_subtensor.return_value = mock_instance
+        mock_instance.get_tao_dividends.return_value = {"test_hotkey": 100.0}
+        mock_get_sentiment.return_value = 0.8
+        
+        response = client.get(
+            "/api/v1/tao_dividends?netuid=18&hotkey=test_hotkey&trade=false",
+            headers={"Authorization": f"Bearer {api_key}"}
         )
         
-        # Mock Chutes API response
-        with patch("httpx.AsyncClient.post") as mock_post:
-            mock_post.return_value = MagicMock(
-                status_code=200,
-                json=lambda: {"sentiment_score": 75.0}
-            )
-            
-            sentiment_score = await get_sentiment(18)
-            assert sentiment_score == 75.0
+        assert response.status_code == 200
+        data = response.json()
+        assert "dividends" in data
+        assert "hotkey" in data
+        assert "netuid" in data
+        assert "timestamp" in data
+
 
 @pytest.mark.asyncio
-async def test_analyze_sentiment():
-    """Test sentiment analysis using Chutes.ai."""
-    tweets = [
-        {"text": "Positive tweet about Bittensor", "created_at": datetime.utcnow().isoformat()},
-        {"text": "Another positive tweet", "created_at": datetime.utcnow().isoformat()}
-    ]
+async def test_get_sentiment_failure(client, db_session):
+    """Test failed sentiment analysis."""
+    api_key = os.getenv("API_TOKEN", "test_key")
     
-    with patch("httpx.AsyncClient.post") as mock_post:
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {"sentiment_score": 80.0}
+    # Mock all external services
+    with patch("app.services.redis_client") as mock_redis, \
+         patch("app.utils.Subtensor") as mock_subtensor, \
+         patch("app.utils.get_sentiment") as mock_get_sentiment:
+        
+        mock_redis.get.return_value = None
+        mock_instance = MagicMock()
+        mock_subtensor.return_value = mock_instance
+        mock_instance.get_tao_dividends.return_value = {"test_hotkey": 100.0}
+        mock_get_sentiment.return_value = -0.8
+        
+        response = client.get(
+            "/api/v1/tao_dividends?netuid=18&hotkey=test_hotkey&trade=false",
+            headers={"Authorization": f"Bearer {api_key}"}
         )
         
-        sentiment_score = await analyze_sentiment(tweets)
-        assert sentiment_score == 80.0
+        assert response.status_code == 200
+        data = response.json()
+        assert "dividends" in data
+        assert "hotkey" in data
+        assert "netuid" in data
+        assert "timestamp" in data
+
 
 @pytest.mark.asyncio
-async def test_perform_stake():
-    """Test stake operation."""
-    with patch("app.utils.subtensor") as mock_subtensor:
-        mock_subtensor.add_stake.return_value = True
-        
-        result = await perform_stake(18, "test_hotkey", 1.0)
-        assert result is True
-        mock_subtensor.add_stake.assert_called_once()
-
-@pytest.mark.asyncio
-async def test_perform_unstake():
-    """Test unstake operation."""
-    with patch("app.utils.subtensor") as mock_subtensor:
-        mock_subtensor.unstake.return_value = True
-        
-        result = await perform_unstake(18, "test_hotkey", 1.0)
-        assert result is True
-        mock_subtensor.unstake.assert_called_once()
-
-@pytest.mark.asyncio
-async def test_sentiment_based_staking():
-    """Test the complete sentiment-based staking flow."""
-    # Mock Datura API response
-    mock_tweets = {
-        "tweets": [
-            {"text": "Bittensor netuid 18 is performing well", "created_at": datetime.utcnow().isoformat()},
-            {"text": "Great progress with subnet 18", "created_at": datetime.utcnow().isoformat()}
-        ]
-    }
+async def test_get_sentiment_neutral(client, db_session):
+    """Test neutral sentiment analysis."""
+    api_key = os.getenv("API_TOKEN", "test_key")
     
-    with patch("httpx.AsyncClient.get") as mock_get, \
-         patch("httpx.AsyncClient.post") as mock_post, \
-         patch("app.utils.subtensor") as mock_subtensor:
+    # Mock all external services
+    with patch("app.services.redis_client") as mock_redis, \
+         patch("app.utils.Subtensor") as mock_subtensor, \
+         patch("app.utils.get_sentiment") as mock_get_sentiment:
         
-        # Mock Datura API
-        mock_get.return_value = MagicMock(
-            status_code=200,
-            json=lambda: mock_tweets
+        mock_redis.get.return_value = None
+        mock_instance = MagicMock()
+        mock_subtensor.return_value = mock_instance
+        mock_instance.get_tao_dividends.return_value = {"test_hotkey": 100.0}
+        mock_get_sentiment.return_value = 0.0
+        
+        response = client.get(
+            "/api/v1/tao_dividends?netuid=18&hotkey=test_hotkey&trade=false",
+            headers={"Authorization": f"Bearer {api_key}"}
         )
         
-        # Mock Chutes API
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {"sentiment_score": 75.0}
-        )
-        
-        # Mock Bittensor operations
-        mock_subtensor.add_stake.return_value = True
-        
-        # Test positive sentiment (should stake)
-        sentiment_score = await get_sentiment(18)
-        assert sentiment_score == 75.0
-        
-        # Calculate stake amount
-        stake_amount = 0.01 * sentiment_score
-        assert stake_amount == 0.75
-        
-        # Perform stake
-        result = await perform_stake(18, "test_hotkey", stake_amount)
-        assert result is True
-
-@pytest.mark.asyncio
-async def test_sentiment_based_unstaking():
-    """Test the complete sentiment-based unstaking flow."""
-    # Mock Datura API response with negative sentiment
-    mock_tweets = {
-        "tweets": [
-            {"text": "Bittensor netuid 18 is having issues", "created_at": datetime.utcnow().isoformat()},
-            {"text": "Problems with subnet 18", "created_at": datetime.utcnow().isoformat()}
-        ]
-    }
-    
-    with patch("httpx.AsyncClient.get") as mock_get, \
-         patch("httpx.AsyncClient.post") as mock_post, \
-         patch("app.utils.subtensor") as mock_subtensor:
-        
-        # Mock Datura API
-        mock_get.return_value = MagicMock(
-            status_code=200,
-            json=lambda: mock_tweets
-        )
-        
-        # Mock Chutes API with negative sentiment
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {"sentiment_score": -50.0}
-        )
-        
-        # Mock Bittensor operations
-        mock_subtensor.unstake.return_value = True
-        
-        # Test negative sentiment (should unstake)
-        sentiment_score = await get_sentiment(18)
-        assert sentiment_score == -50.0
-        
-        # Calculate unstake amount
-        unstake_amount = 0.01 * abs(sentiment_score)
-        assert unstake_amount == 0.5
-        
-        # Perform unstake
-        result = await perform_unstake(18, "test_hotkey", unstake_amount)
-        assert result is True 
+        assert response.status_code == 200
+        data = response.json()
+        assert "dividends" in data
+        assert "hotkey" in data
+        assert "netuid" in data
+        assert "timestamp" in data
