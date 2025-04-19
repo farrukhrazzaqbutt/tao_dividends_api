@@ -16,8 +16,10 @@ services:
       - BITTENSOR_WALLET_PATH=${BITTENSOR_WALLET_PATH}
       - BITTENSOR_NETWORK=${BITTENSOR_NETWORK}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - .:/app
     networks:
@@ -37,8 +39,10 @@ services:
       - BITTENSOR_WALLET_PATH=${BITTENSOR_WALLET_PATH}
       - BITTENSOR_NETWORK=${BITTENSOR_NETWORK}
     depends_on:
-      - web
-      - redis
+      web:
+        condition: service_started
+      redis:
+        condition: service_healthy
     volumes:
       - .:/app
     networks:
@@ -56,6 +60,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - tao_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
@@ -65,6 +74,11 @@ services:
       - redis_data:/data
     networks:
       - tao_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

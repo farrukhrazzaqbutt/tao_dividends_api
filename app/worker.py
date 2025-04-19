@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import logging
 from app.utils import Subtensor
 from datetime import datetime
+from app.config import settings
 
 # Load environment variables
 load_dotenv()

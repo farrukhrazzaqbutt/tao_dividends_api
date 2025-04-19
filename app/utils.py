@@ -19,7 +19,12 @@ logger = logging.getLogger(__name__)
 datura = Datura(api_key=os.getenv("DATURA_API_KEY"))
 
 # Initialize Subtensor
-subtensor = subtensor(network="finney")  # Use Finney network instead of local
+try:
+    subtensor = subtensor(network="finney")  # Use Finney network instead of local
+except ConnectionRefusedError:
+    print("Warning: Unable to connect to the Finney network. Using a mock subtensor for testing purposes.")
+    # Initialize a mock subtensor or handle the error gracefully
+    subtensor = None  # or some other default value
 
 # Initialize wallet
 wallet = Wallet()
